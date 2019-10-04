@@ -9,10 +9,14 @@ import sys
 from bitstring import ConstBitStream
 import argparse
 import datetime
+from profilehooks import timecall, profile
 
 BLOCK_START_PATTERN = 0x314159265359
 MAX_HUFF_CODE_BITS = 20
 HUFF_TREE_SIZE = 50
+HUFF_SYMBOLS_NUMBER = 258
+RUN_A = 0
+RUN_B = 1
 FIRST_BLOCK_POS = 32
 SUPPORTED_DATETIME_FORMATS = [  "%Y-%m-%dT%H:%M:%S",	# "2017-02-21T14:53:22"
                                 "%b %d %H:%M:%S",	    # "Oct 30 05:54:01" 
@@ -76,6 +80,7 @@ def parse_block_header(bitStream):
 
     # convert StreamHeaderLevel from bytes to int and calc size of block 
     blockSize = (bz2Data['StreamHeaderLevel'][0] - b'0'[0]) * 100000
+    bz2Data['blockSize'] = blockSize
 
     try:
         if hBlockMagic != BLOCK_START_PATTERN:
@@ -135,15 +140,15 @@ def parse_sym_map(bitStream):
     then that indicates that the corresponding symbol is present. """
     # sorted stack of used symbols
     symbolStack = []
-    MapL1 = bitStream.read(16).uint
+    mapL1 = bitStream.read(16).uint
 
     for i in range(16):
-        if MapL1 & (0x8000 >> i):
-            MapL2 = bitStream.read(16).uint
+        if mapL1 & (0x8000 >> i):
+            mapL2 = bitStream.read(16).uint
             for j in range(16):
-                if MapL2 & (0x8000 >> j):
+                if mapL2 & (0x8000 >> j):
                     symbolStack.append(16 * i + j)
-    #print("symbolStack = " + str(symbolStack))
+
     return symbolStack
 
 
@@ -213,10 +218,9 @@ def parse_selectors(bitStream, numTrees, numSelectors):
 
     return selectors
 
-
+#@timecall
 def decode_mtf(idxs, stack):
-    """ 
-        The idea behind MTF encoding: 
+    """ The idea behind MTF encoding: 
     INPUT: 
     * stream of symbols
     * sorted stack of all the unique symbols that appear in syms
@@ -236,13 +240,13 @@ def decode_mtf(idxs, stack):
     4. Add a symbol to a list of symbols
     RETURN: list of symbols
     """
-    symbols = []
+    decodedSymbols = []
     for i in idxs:
         s = stack[i]
         stack = [stack.pop(i)] + stack
-        symbols.append(s)
-    #print("syms = " + str(syms))
-    return symbols
+        decodedSymbols.append(s)
+
+    return decodedSymbols
 
 
 def parse_trees(bitStream, numTrees, symbolStack):
@@ -300,7 +304,7 @@ def process_options():
     parsedOpts = parser.parse_args()
 
     return parsedOpts.frm, parsedOpts.to, parsedOpts.file
-
+ 
 
 def validate_datetime_string(datetimeStr):
     # validate --from, --to datetime strings
@@ -315,64 +319,123 @@ def validate_datetime_string(datetimeStr):
                 continue
 
 
-def decode_huffman_codes(blockTrees):
-    """ Decode Huffman coded symbols.
+def decompress_block(blockTrees, bitStream):
+    rle2Symbols = decode_huffman_codes(blockTrees, bitStream)
+    #print("huffSymbols = " + str(huffSymbols))
+    mtfSymbols = decode_rle2(rle2Symbols)
+    #print("rle2Symbols = " + str(rle2Symbols))
+    bwtSymbols = decode_mtf(mtfSymbols, blockTrees['symbolStack'])
+    #print("mtfSymbols = " + str(mtfSymbols))
+    rle1Symbols = decode_bwt(bwtSymbols)
+    #print(rle1Symbols.decode())
+    decompressedSymbols = decode_rle1(rle1Symbols.decode())
+
+    # check decompressed block CRC
+    blockCRC = calc_block_crc32(decompressedSymbols)
+
+    headerCRC = int.from_bytes( bz2Data['BlockHeaderCRC'],
+                                byteorder='big',
+                                signed=True )
+
+    # check if calculated crc of block data equals to header crc value
+    if blockCRC != headerCRC:
+        msg = "block CRC {} != header CRC {}."
+        raise ValueError(msg.format(blockCRC, headerCRC))
+
+    return decompressedSymbols
+
+#@timecall
+@profile
+def decode_huffman_codes(blockTrees, bitStream):
+    """ Decode bits into Huffman coded symbols.
     
-    This is the first stage of bzip2 decompression stack.
-    We decode the bits of the block data by using the Huffman tables and
-    selectors list.
+    1-st stage of bzip2 decompression stack.
+    Decode bits of the block data by using the Huffman tables and selectors
+    list obtained from block header in parse_selectors()l.
     """
-    huffSymbolsCounter = 0
-    
-    trees = blockTrees['trees']
+    decodedSymbols = []
+    symbolsCounter = 0
+    #print(blockTrees['numTrees'])
     selectors = iter(blockTrees['selectors'])
+    # symbolStack is the number of symbols in the stack from MTF stage.
+    # Subtract 1 for losing the 0 symbol in the RLE2 stage and add 3 for
+    # gaining RUNA, RUNB, EOB symbols
+    huffSymbolStack = len(blockTrees['symbolStack']) - 1 + 3
+    EOB = huffSymbolStack - 1
+    #print("EOB = " + str(EOB))
+
+    trees = blockTrees['trees']
     huffTreesData = create_decode_huffman_tables(trees)
+    #print("tree\tminLen\tmaxLen\tcurlen\tsymbol\tpermutes")
 
     #print("selectors = " + str(blockTrees['selectors']))
-    
-    while True:
-        if huffSymbolsCounter == 0:
-            huffSymbolsCounter = HUFF_TREE_SIZE - 1
+    huffSymbol = 0
+    while huffSymbol < EOB:
+        if symbolsCounter == 0:
+            symbolsCounter = HUFF_TREE_SIZE
             curSelector = next(selectors)
-            curTree = trees[curSelector]
-            permutes = huffTreesData[curSelector]['permutes']
-            limits = huffTreesData[curSelector]['limits']
-            bases = huffTreesData[curSelector]['bases']
-            minLen = huffTreesData[curSelector]['minLen']
-            maxLen = huffTreesData[curSelector]['maxLen']
             #print("curSelector = " + str(curSelector))
-            #print("curTree = " + str(curTree))
+            permutes = huffTreesData[curSelector]['permutes']
             #print("permutes = " + str(permutes))
+            limits = huffTreesData[curSelector]['limits']
             #print("limits = " + str(limits))
+            bases = huffTreesData[curSelector]['bases']
             #print("bases = " + str(bases))
+            minLen = huffTreesData[curSelector]['minLen']
             #print("minLen = " + str(minLen))
+            maxLen = huffTreesData[curSelector]['maxLen']
             #print("maxLen = " + str(maxLen))
-        huffSymbolsCounter -= 1
-        exit(0)
-    print('curTree = ' + str(curTree))
-
-    
-    #print(blockTrees)
+        #print("{}".format(curSelector), end="\t")
 
 
-def determine_current_huffman_tree(blockTrees, huffTreesData):
-    selectorIdx = 0
-    curSelector = blockTrees['selectors'][selectorIdx]
+        huffSymbol, huffSymbolLen = \
+            read_huffman_coded_symbol(minLen, maxLen, bitStream, limits)
+        """
+        huffSymbolLen = minLen
+        huffSymbol = bitStream.read(huffSymbolLen).uint
+        while True:
+            if huffSymbolLen > maxLen:
+                raise ValueError("huffSymbolLen can't be > maxLen")
+            if huffSymbol <= limits[huffSymbolLen]:
+                break
+            huffSymbolLen += 1
+            # read additional bit
+            huffSymbol = (huffSymbol << 1) | bitStream.read(1).uint
+        """
 
-    for selector in blockTrees['selectors']:
-        print("selector = " + str(selector))
-        yield selector
-    
-"""
-    if selectorIdx >= blockTrees['numSelectors']:
-        raise ValueError("selector can't be >= numSelectors.")
-    curTree = blockTrees['trees'][curSelector]
-    #print('selector = ' + str(selector))
-    selectorIdx += 1
-    print(huffTreesData)
-"""
+        symbolsCounter -= 1
 
+        # decode Huffman coded symbol (with bounds checking)
+        huffSymbol -= bases[huffSymbolLen]
 
+        if huffSymbol >= HUFF_SYMBOLS_NUMBER:
+            msg = "huffSymbol {} can't be >= {}."
+            raise ValueError(msg.format(huffSymbol, HUFF_SYMBOLS_NUMBER))
+
+        huffSymbol = permutes[huffSymbol]
+        decodedSymbols.append(huffSymbol)
+        #print(huffSymbol)
+        #print("huffSymbol = " + str(huffSymbol))
+
+    return decodedSymbols
+
+#@timecall
+def read_huffman_coded_symbol(minLen, maxLen, bitStream, limits):
+    """Read Huffman coded symbol. """
+    huffSymbolLen = minLen
+    huffSymbol = bitStream.read(huffSymbolLen).uint
+    while True:
+        if huffSymbolLen > maxLen:
+            raise ValueError("huffSymbolLen can't be > maxLen")
+        if huffSymbol <= limits[huffSymbolLen]:
+            break
+        huffSymbolLen += 1
+        # read additional bit
+        huffSymbol = (huffSymbol << 1) | bitStream.read(1).uint
+
+    return huffSymbol, huffSymbolLen
+
+#timecall
 def create_decode_huffman_tables(trees):
     """ Generate several tables which are used to decode huffman codes. """
     huffTreesData = {}
@@ -393,15 +456,14 @@ def create_decode_huffman_tables(trees):
                                  'limits': limits,
                                  'bases': bases,
                                  'minLen': minLen,
-                                 'maxLen': maxLen
-                                }
+                                 'maxLen': maxLen }
                             })
 
     return huffTreesData
 
-
+#@timecall
 def generate_permutes_table(minLen, maxLen, Tree):
-    """ Generate permutes table.
+    """Generate permutes table.
     
     This is the lookup table for converting huffman coded symbols into decoded
     symbols. bases table is the amount to subtract from the value of a huffman
@@ -415,9 +477,9 @@ def generate_permutes_table(minLen, maxLen, Tree):
 
     return permutes
 
-
+#@timecall
 def generate_limits_table(minLen, maxLen, Tree):
-    """ Generates limits table.
+    """Generates limits table.
     
     Which stores the largest symbol-coding value at each bit length, which is
     (previous limit << 1) + symbols at this level.
@@ -432,9 +494,9 @@ def generate_limits_table(minLen, maxLen, Tree):
     
     return limits
 
-
+#@timecall
 def generate_bases_table(minLen, maxLen, Tree, limits):
-    """ Generate bases table.
+    """Generate bases table.
     
     It stores number of symbols to ignore at each bit length, which is:
     limit - cumulative count of symbols coded for already.
@@ -451,21 +513,191 @@ def generate_bases_table(minLen, maxLen, Tree, limits):
 
 
 def symbols_length_count(maxLen, Tree):
-    """ Create a list of symbol bit lengths (kind of a histogram).
+    """Create a list of symbol bit lengths (kind of a histogram).
     
     Where list's index is symbol's bit length and list's element is the count
     of such symbols.
     """
-    symLenCount = [0] * (maxLen+1)
+    symLenCount = [0] * (maxLen + 1)
     for treeItem in Tree:
         symLenCount[treeItem] += 1
 
     return symLenCount
 
+#@timecall
+def decode_rle2(rle2Symbols):
+    """Decode RLE2 symbols.
+    
+    2-nd stage of bzip2 decompression stack.
+    Decode RLE2 symbols by converting RUN_A and RUN_B sybmols (0 and 1) to run
+    of zeroes.
+    Decrement every symbol except RUN_A, RUN_B, EOB. So the resulting list of
+    indexes is ready fom MTF decoding.
+    """
+
+    decodedSymbols = []
+    blockSize = bz2Data['blockSize']
+    runPos, zeroCounter = 0, 0
+    
+    for rle2Symbol in rle2Symbols:
+        #print(rle2Symbol)
+        if rle2Symbol <= RUN_B:
+            # If this is the start of a new run, zero out counter
+            if runPos == 0:
+                runPos = 1
+                zeroCounter = 0
+            # Neat trick that saves 1 symbol: instead of or-ing 0 or 1 at
+			# each bit position, add 1 or 2 instead.  For example,
+			# 1011 is 1<<0 + 1<<1 + 2<<2.  1010 is 2<<0 + 2<<1 + 1<<2.
+			# You can make any bit pattern that way using 1 less symbol than
+			# the basic or 0/1 method (except all bits 0, which would use no
+			# symbols, but a run of length 0 doesn't mean anything in this
+			# context). Thus space is saved.
+            zeroCounter += (runPos << rle2Symbol)            
+            runPos <<= 1
+            #print("zeroCounter = " + str(zeroCounter))
+            continue
+
+        # When we hit the first non-run symbol after a run, we now know
+		# how many times to repeat the last literal, so append that many
+		# copies to our buffer of decoded symbols (dbuf) now.  (The last
+		# literal used is the one at the head of the mtfSymbol array.) */
+        if runPos:
+            runPos = 0
+            
+            if len(rle2Symbols) + zeroCounter >= blockSize:
+                msg = "Amount of RLE2 symbols {} + amount of zeros {} can't be \
+                >= size of block {}."
+                raise ValueError(msg.format(len(rle2Symbols), zeroCounter, 
+                                blockSize))
+            
+            decodedSymbols.extend([0] * zeroCounter)
+
+        # decrement every non RUNA, RUNB, EOB symbols to conform to mtf alphabet
+        decodedSymbols.append(rle2Symbol - 1)
+
+
+    # delete EOB symbol
+    del decodedSymbols[-1]
+
+    return decodedSymbols
+
+#@timecall
+def decode_bwt(bwtSymbols):
+    """Decode BWT symbols.
+
+    """
+    origPtr = bz2Data['BlockHeaderOrigPtr']
+    #print("origPtr = " + str(origPtr))
+    charsCount = chars_count(bwtSymbols)
+    #print(charsCount)
+
+    charsStartPos = chars_start_pos(charsCount)
+    #print(charsStartPos)
+
+    permBWT = permute_bwt(bwtSymbols, charsStartPos)
+    #print(permBWT)
+
+    if origPtr >= len(permBWT):
+        msg = "origPtr {} can't be >= amout of decompressed characters {}."
+        raise ValueError(msg.format(origPtr, len(permBWT)))
+
+    i = permBWT[origPtr]
+    #print("permBWT[origPtr] = " + str(i))
+    decodedSymbols = bytearray(len(bwtSymbols))
+    for j in range(len(bwtSymbols)):
+        decodedSymbols[j] = bwtSymbols[i]
+        i = permBWT[i]
+    
+    return decodedSymbols
+
+
+def chars_count(bwtSymbols):
+    """ Count amount of every character.
+    
+    charsCount index - character value
+    charsCount value - amount of characters of given value
+    """
+    charsCount = [0] * 256
+    for bwtSymbol in bwtSymbols:
+        charsCount[bwtSymbol] += 1
+    
+    return charsCount
+
+
+def chars_start_pos(charsCount):
+    """ Find every char start position of BWT data.
+
+    charsCount gives us amount of every char occurence. Given this we calculate
+    start position of every character in encoded BWT data if it would be sorted.
+    """
+    charsStartPos, n = [0] * 256, 0
+    for i, v in enumerate(charsCount):
+        charsStartPos[i] = n
+        n += v
+    
+    return charsStartPos
+
+
+def permute_bwt(bwtSymbols, charsStartPos):
+    perm = [0] * len(bwtSymbols)
+    for i, v in enumerate(bwtSymbols):
+        perm[charsStartPos[v]] = i
+        #print("bwt = {}, charsStartPos[v] = {}, perm[charsStartPos[v]] = {}".format(v,
+        #    charsStartPos[v], perm[charsStartPos[v]]))
+        charsStartPos[v] += 1
+        
+    return perm
+
+#@timecall
+def decode_rle1(rle1Symbols):
+    """Decode RLE1 symbols.
+
+    """
+    decodedSymbols = ""
+    runLenByte = 0
+    runCounter = 5
+    prevSym = ''
+
+    for curSym in rle1Symbols:
+        runCounter -= 1
+        
+        if runCounter == 0:
+            runLenByte = ord(curSym)
+            runCounter = 5
+            decodedSymbols += (prevSym * runLenByte)
+            #print("curSym = {} runLenByte = {} {}".format(curSym, runLenByte,
+            #  prevSym * runLenByte))
+            continue
+        
+        if curSym != prevSym:
+            runCounter = 4
+            prevSym = curSym
+
+        decodedSymbols += curSym
+
+    return decodedSymbols
+
+#@timecall
+def calc_block_crc32(decompressedBlock):
+    crc = 0xffffffff
+
+    crc32Table = init_crc32_table()
+    #for i, v in enumerate(crc32Table):
+    #    if (i + 1) % 8 == 0:
+    #        print(hex(v))
+    #    else:
+    #        print(hex(v), end=' ')
+
+    for curSym in decompressedBlock:
+        crc = ((crc << 8) & 0xffffffff) ^ crc32Table[(crc >> 24) ^ ord(curSym)]
+        #print("crc = " + str(crc))
+    
+    return ~crc
+
 
 def main():
     optFrom, optTo, optFile = process_options()
-
 
     bitStream = ConstBitStream(optFile)
     #blockNumbers = bitStream.findall(BLOCK_START_PATTERN)
@@ -474,17 +706,8 @@ def main():
     parse_stream_header(bitStream)
     blockTrees = parse_stream_block(bitStream)
     
-
-    #print(bz2Data)
-    
-    crc32Table = init_crc32_table()
-    #for i, v in enumerate(crc32Table):
-    #    if (i + 1) % 8 == 0:
-    #        print(hex(v))
-    #    else:
-    #        print(hex(v), end=' ')
-    
-    decode_huffman_codes(blockTrees)
+    decompressedBlock = decompress_block(blockTrees, bitStream)
+    #print(decompressedBlock)
 
     return 0
 
