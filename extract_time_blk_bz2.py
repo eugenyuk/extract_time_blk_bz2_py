@@ -345,7 +345,7 @@ def decompress_block(blockTrees, bitStream):
     return decompressedSymbols
 
 #@timecall
-@profile
+#@profile
 def decode_huffman_codes(blockTrees, bitStream):
     """ Decode bits into Huffman coded symbols.
     
@@ -423,7 +423,8 @@ def decode_huffman_codes(blockTrees, bitStream):
 def read_huffman_coded_symbol(minLen, maxLen, bitStream, limits):
     """Read Huffman coded symbol. """
     huffSymbolLen = minLen
-    huffSymbol = bitStream.read(huffSymbolLen).uint
+    huffSymbol = bitStream.read('uint:{}'.format(huffSymbolLen))
+    #huffSymbol = bitStream.read(huffSymbolLen).uint
     while True:
         if huffSymbolLen > maxLen:
             raise ValueError("huffSymbolLen can't be > maxLen")
@@ -431,7 +432,8 @@ def read_huffman_coded_symbol(minLen, maxLen, bitStream, limits):
             break
         huffSymbolLen += 1
         # read additional bit
-        huffSymbol = (huffSymbol << 1) | bitStream.read(1).uint
+        huffSymbol = (huffSymbol << 1) | bitStream.read('uint:1')
+        #huffSymbol = (huffSymbol << 1) | bitStream.read(1).uint
 
     return huffSymbol, huffSymbolLen
 
