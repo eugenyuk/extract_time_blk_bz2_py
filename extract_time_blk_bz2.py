@@ -14,7 +14,7 @@ from profilehooks import timecall, profile
 BLOCK_START_PATTERN = 0x314159265359
 MAX_HUFF_CODE_BITS = 20
 HUFF_TREE_SIZE = 50
-HUFF_SYMBOLS_NUMBER = 258
+HUFF_SYMBOLS_MAX = 258
 RUN_A = 0
 RUN_B = 1
 FIRST_BLOCK_POS = 32
@@ -390,27 +390,15 @@ def decode_huffman_codes(blockTrees, bitStream):
 
         huffSymbol, huffSymbolLen = \
             read_huffman_coded_symbol(minLen, maxLen, bitStream, limits)
-        """
-        huffSymbolLen = minLen
-        huffSymbol = bitStream.read(huffSymbolLen).uint
-        while True:
-            if huffSymbolLen > maxLen:
-                raise ValueError("huffSymbolLen can't be > maxLen")
-            if huffSymbol <= limits[huffSymbolLen]:
-                break
-            huffSymbolLen += 1
-            # read additional bit
-            huffSymbol = (huffSymbol << 1) | bitStream.read(1).uint
-        """
 
         symbolsCounter -= 1
 
         # decode Huffman coded symbol (with bounds checking)
-        huffSymbol -= bases[huffSymbolLen]
+        huffSymbol = (huffSymbol >> (maxLen - huffSymbolLen)) - bases[huffSymbolLen]
 
-        if huffSymbol >= HUFF_SYMBOLS_NUMBER:
+        if huffSymbol >= HUFF_SYMBOLS_MAX:
             msg = "huffSymbol {} can't be >= {}."
-            raise ValueError(msg.format(huffSymbol, HUFF_SYMBOLS_NUMBER))
+            raise ValueError(msg.format(huffSymbol, HUFF_SYMBOLS_MAX))
 
         huffSymbol = permutes[huffSymbol]
         decodedSymbols.append(huffSymbol)
@@ -422,9 +410,9 @@ def decode_huffman_codes(blockTrees, bitStream):
 #@timecall
 def read_huffman_coded_symbol(minLen, maxLen, bitStream, limits):
     """Read Huffman coded symbol. """
+    """
     huffSymbolLen = minLen
     huffSymbol = bitStream.read('uint:{}'.format(huffSymbolLen))
-    #huffSymbol = bitStream.read(huffSymbolLen).uint
     while True:
         if huffSymbolLen > maxLen:
             raise ValueError("huffSymbolLen can't be > maxLen")
@@ -433,8 +421,25 @@ def read_huffman_coded_symbol(minLen, maxLen, bitStream, limits):
         huffSymbolLen += 1
         # read additional bit
         huffSymbol = (huffSymbol << 1) | bitStream.read('uint:1')
-        #huffSymbol = (huffSymbol << 1) | bitStream.read(1).uint
+    """
+    #"""
+    huffSymbol = bitStream.read('uint:{}'.format(maxLen))
+    
+    huffSymbolLen = minLen
+    while huffSymbol > limits[huffSymbolLen]:
+        huffSymbolLen += 1
+    if huffSymbolLen > maxLen:
+        msg = "huffman symbol length {} can't be > maxLen. Bad bzip2 data."
+        raise ValueError(msg.format(huffSymbolLen, maxLen))
+    
+    #print("bitStream.pos before correction = " + str(bitStream.pos))
+    bitStream.pos -= maxLen - huffSymbolLen
+    #print("bitStream.pos after correction = " + str(bitStream.pos))
+    #print("huffSymbol = {}, huffSymbolLen = {}".format(huffSymbol, huffSymbolLen))
+    #exit(1)
+    #"""
 
+    #print("bitStream.pos = " + str(bitStream.pos))
     return huffSymbol, huffSymbolLen
 
 #timecall
@@ -450,7 +455,7 @@ def create_decode_huffman_tables(trees):
 
         limits = generate_limits_table(minLen, maxLen, tree)
         #print("limits = " + str(limits))
-        
+                
         bases = generate_bases_table(minLen, maxLen, tree, limits)
         #print("bases = " + str(bases))
 
@@ -460,7 +465,7 @@ def create_decode_huffman_tables(trees):
                                  'minLen': minLen,
                                  'maxLen': maxLen }
                             })
-
+    #exit(1)
     return huffTreesData
 
 #@timecall
@@ -491,9 +496,9 @@ def generate_limits_table(minLen, maxLen, Tree):
     vec = 0
     for length in range(minLen, maxLen + 1):
         vec += symLenCount[length]
-        limits[length] = vec - 1
+        limits[length] = (vec << (maxLen - length)) - 1
         vec <<= 1
-    
+
     return limits
 
 #@timecall
@@ -505,12 +510,15 @@ def generate_bases_table(minLen, maxLen, Tree, limits):
     """
     bases = [0] * (maxLen + 1)
     symLenCount = symbols_length_count(maxLen, Tree)
-    t = 0
+    t, pp = 0, 0
     for length in range(minLen, maxLen):
-        startVal = ((limits[length] + 1) << 1)
+        #startVal = ((limits[length] + 1) << 1)
+        pp += symLenCount[length]
         t += symLenCount[length]
-        bases[length + 1] = startVal - t
-    
+        pp <<= 1
+        #bases[length + 1] = startVal - t
+        bases[length + 1] = pp - t
+
     return bases
 
 
@@ -709,7 +717,7 @@ def main():
     blockTrees = parse_stream_block(bitStream)
     
     decompressedBlock = decompress_block(blockTrees, bitStream)
-    #print(decompressedBlock)
+    print(decompressedBlock)
 
     return 0
 
