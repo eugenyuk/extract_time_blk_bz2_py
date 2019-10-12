@@ -61,9 +61,7 @@ def process_options():
     #print("parsedOpts.end datetime string = " + str(optTo))
     #print("parsedOpts.end datetime format = " + str(optToFormat))
 
-    if optFromFormat != optToFormat:
-        msg = "Datetime formats of --from {} and --to {} are not equal."
-        raise ValueError(msg.format(optFromFormat, optToFormat))
+    isDateTimeFormatsEqual(optFromFormat, optToFormat)
 
     return optFrom, optTo, parsedOpts.file
 
@@ -80,6 +78,12 @@ def validate_datetime_string(datetimeStr):
                 raise argparse.ArgumentTypeError(msg)
             else:
                 continue
+
+
+def isDateTimeFormatsEqual(optFromFormat, optToFormat):
+    if optFromFormat != optToFormat:
+        msg = "Datetime formats of --from {} and --to {} are not equal."
+        raise ValueError(msg.format(optFromFormat, optToFormat))
 
 
 def parse_stream_header(bitStream):
