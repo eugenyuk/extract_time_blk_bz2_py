@@ -36,6 +36,39 @@ class BlockHeaderOrigPtrError (Error): pass
 bz2Data = {}
 
 
+def process_options():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(    '--from',
+                            dest = 'frm',
+                            required = True, 
+                            help = 'Start datetime border.',
+                            type = validate_datetime_string )
+    parser.add_argument(    '--to', 
+                            required = True, 
+                            help = 'End datetime border.',
+                            type = validate_datetime_string )
+    parser.add_argument(    '--file',
+                            required = True,
+                            help = 'Set input bz2 file.',
+                            type = argparse.FileType('r') )
+    parsedOpts = parser.parse_args()
+
+    return parsedOpts.frm, parsedOpts.to, parsedOpts.file
+
+
+def validate_datetime_string(datetimeStr):
+    # validate --from, --to datetime strings
+    for i, datetimeFormat in enumerate(SUPPORTED_DATETIME_FORMATS):
+        try:
+            return datetime.datetime.strptime(datetimeStr, datetimeFormat)
+        except ValueError:
+            if i == len(SUPPORTED_DATETIME_FORMATS) - 1:
+                msg = "Not a valid date: '{0}'.".format(datetimeStr)
+                raise argparse.ArgumentTypeError(msg)
+            else:
+                continue
+
+
 def parse_stream_header(bitStream):
     # read StreamHeader:= HeaderMagic Version Level
     hStreamMagic = bitStream.read(16).bytes
@@ -286,39 +319,6 @@ def init_crc32_table():
     return crc32Table
 
 
-def process_options():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(    '--from',
-                            dest = 'frm',
-                            required = True, 
-                            help = 'Start datetime border.',
-                            type = validate_datetime_string )
-    parser.add_argument(    '--to', 
-                            required = True, 
-                            help = 'End datetime border.',
-                            type = validate_datetime_string )
-    parser.add_argument(    '--file',
-                            required = True,
-                            help = 'Set input bz2 file.',
-                            type = argparse.FileType('r') )
-    parsedOpts = parser.parse_args()
-
-    return parsedOpts.frm, parsedOpts.to, parsedOpts.file
- 
-
-def validate_datetime_string(datetimeStr):
-    # validate --from, --to datetime strings
-    for i, datetimeFormat in enumerate(SUPPORTED_DATETIME_FORMATS):
-        try:
-            return datetime.datetime.strptime(datetimeStr, datetimeFormat)
-        except ValueError:
-            if i == len(SUPPORTED_DATETIME_FORMATS) - 1:
-                msg = "Not a valid date: '{0}'.".format(datetimeStr)
-                raise argparse.ArgumentTypeError(msg)
-            else:
-                continue
-
-
 def decompress_block(blockTrees, bitStream):
     rle2Symbols = decode_huffman_codes(blockTrees, bitStream)
     #print("huffSymbols = " + str(huffSymbols))
@@ -345,7 +345,7 @@ def decompress_block(blockTrees, bitStream):
     return decompressedSymbols
 
 #@timecall
-#@profile
+@profile
 def decode_huffman_codes(blockTrees, bitStream):
     """ Decode bits into Huffman coded symbols.
     
@@ -403,7 +403,6 @@ def decode_huffman_codes(blockTrees, bitStream):
         huffSymbol = permutes[huffSymbol]
         decodedSymbols.append(huffSymbol)
         #print(huffSymbol)
-        #print("huffSymbol = " + str(huffSymbol))
 
     return decodedSymbols
 
@@ -717,7 +716,7 @@ def main():
     blockTrees = parse_stream_block(bitStream)
     
     decompressedBlock = decompress_block(blockTrees, bitStream)
-    print(decompressedBlock)
+    #print(decompressedBlock)
 
     return 0
 
