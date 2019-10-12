@@ -61,7 +61,7 @@ def process_options():
     #print("parsedOpts.end datetime string = " + str(optTo))
     #print("parsedOpts.end datetime format = " + str(optToFormat))
 
-    isDateTimeFormatsEqual(optFromFormat, optToFormat)
+    is_datetime_formats_equal(optFromFormat, optToFormat)
 
     return optFrom, optTo, parsedOpts.file
 
@@ -80,7 +80,7 @@ def validate_datetime_string(datetimeStr):
                 continue
 
 
-def isDateTimeFormatsEqual(optFromFormat, optToFormat):
+def is_datetime_formats_equal(optFromFormat, optToFormat):
     if optFromFormat != optToFormat:
         msg = "Datetime formats of --from {} and --to {} are not equal."
         raise ValueError(msg.format(optFromFormat, optToFormat))
