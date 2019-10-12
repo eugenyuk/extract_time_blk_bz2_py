@@ -39,13 +39,14 @@ bz2Data = {}
 def process_options():
     parser = argparse.ArgumentParser()
     parser.add_argument(    '--from',
-                            dest = 'frm',
-                            required = True, 
-                            help = 'Start datetime border.',
+                            dest = 'start',
+                            required = True,
+                            help = 'Start datetime string.',
                             type = validate_datetime_string )
-    parser.add_argument(    '--to', 
-                            required = True, 
-                            help = 'End datetime border.',
+    parser.add_argument(    '--to',
+                            dest = 'end',
+                            required = True,
+                            help = 'End datetime string.',
                             type = validate_datetime_string )
     parser.add_argument(    '--file',
                             required = True,
@@ -53,14 +54,26 @@ def process_options():
                             type = argparse.FileType('r') )
     parsedOpts = parser.parse_args()
 
-    return parsedOpts.frm, parsedOpts.to, parsedOpts.file
+    optFrom, optFromFormat = parsedOpts.start
+    optTo, optToFormat = parsedOpts.end
+    #print("parsedOpts.start datetime string = " + str(optFrom))
+    #rint("parsedOpts.start datetime format = " + str(optFromFormat))
+    #print("parsedOpts.end datetime string = " + str(optTo))
+    #print("parsedOpts.end datetime format = " + str(optToFormat))
+
+    if optFromFormat != optToFormat:
+        msg = "Datetime formats of --from {} and --to {} are not equal."
+        raise ValueError(msg.format(optFromFormat, optToFormat))
+
+    return optFrom, optTo, parsedOpts.file
 
 
 def validate_datetime_string(datetimeStr):
     # validate --from, --to datetime strings
     for i, datetimeFormat in enumerate(SUPPORTED_DATETIME_FORMATS):
         try:
-            return datetime.datetime.strptime(datetimeStr, datetimeFormat)
+            return  datetime.datetime.strptime(datetimeStr, datetimeFormat), \
+                    datetimeFormat
         except ValueError:
             if i == len(SUPPORTED_DATETIME_FORMATS) - 1:
                 msg = "Not a valid date: '{0}'.".format(datetimeStr)
@@ -345,7 +358,7 @@ def decompress_block(blockTrees, bitStream):
     return decompressedSymbols
 
 #@timecall
-@profile
+#@profile
 def decode_huffman_codes(blockTrees, bitStream):
     """ Decode bits into Huffman coded symbols.
     
