@@ -852,7 +852,7 @@ def find_opt_from_block(fileBitStream, optFromDatetimeObj, datetimeFormat,
             print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
             break
     
-    return decompressedBlock
+    return decompressedBlock, blockLastDatetimeObj, midBlockPos
 
 
 def init_crc32_table():
