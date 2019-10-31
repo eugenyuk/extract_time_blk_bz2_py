@@ -909,8 +909,8 @@ def main():
     datetimeSubstringLength = len(optFromDatetimeObj.strftime(datetimeFormat))
     #print("datetimeSubstringLength = " + str(datetimeSubstringLength))
 
-    firstBlockPos = fileBitStream.pos
-    print("\nFirst block position = " + str(firstBlockPos))
+    #firstBlockPos = fileBitStream.pos
+    #print("\nFirst block position = " + str(firstBlockPos))
     firstBlock = Bz2Block(fileBitStream)
     #print(first_block.decompress(bitStream))
     firstDecompressedBlock = firstBlock.decompress()
@@ -928,7 +928,7 @@ def main():
     # Find last block position (in bits) and move file bit stream position
     # there.
     lastBlockPos = fileBitStream.rfind(BLOCK_START_PATTERN)[0]
-    print("Last block position = {}".format(lastBlockPos))
+    #print("Last block position = {}".format(lastBlockPos))
     lastBlock = Bz2Block(fileBitStream)
     #print("bitStream.pos = " + str(bitStream.pos))
     lastDecompressedBlock = lastBlock.decompress()
@@ -945,25 +945,41 @@ def main():
     optFromDecompressedBlock = None
     if optFromDatetimeObj <= firstBlockLastDatetimeObj:
         optFromDecompressedBlock = firstDecompressedBlock
-        print(firstDecompressedBlock)
+        print(firstDecompressedBlock, end='')
     elif optFromDatetimeObj > lastBlockFirstDatetimeObj:
         print(lastDecompressedBlock)
+        return 0
     elif optFromDatetimeObj == lastBlockFirstDatetimeObj:
-        print("optFromDatetimeObj == lastBlockFirstDatetimeObj")
+        #print("optFromDatetimeObj == lastBlockFirstDatetimeObj")
         # Find penultimate block
         fileBitStream.rfind(BLOCK_START_PATTERN, 0, lastBlockPos - 1)
         prelastBlock = Bz2Block(fileBitStream)
         optFromDecompressedBlock = prelastBlock.decompress()
-        print(optFromDecompressedBlock, lastDecompressedBlock, end='')
+        print(optFromDecompressedBlock, lastDecompressedBlock, sep='')
+        return 0
 
     # Search for a block where --from datetime value is located
     if not optFromDecompressedBlock:
-        optFromDecompressedBlock = find_opt_from_block(fileBitStream, 
+        optFromDecompressedBlock, \
+        blockLastDatetimeObj, \
+        optFromBlockPos = find_opt_from_block(fileBitStream, 
             optFromDatetimeObj, datetimeFormat, datetimeSubstringLength)
-        print(optFromDecompressedBlock)
+        print(optFromDecompressedBlock, end='')
 
-    #while optToDatetimeObj >= blockLastDatetimeObj:
-    #    pass
+    optToBlockPos = optFromBlockPos
+    while optToDatetimeObj >= blockLastDatetimeObj:
+        optToBlockPos = fileBitStream.find(BLOCK_START_PATTERN, 
+            optToBlockPos + 1)[0]
+        optToBlock = Bz2Block(fileBitStream)
+        decompressedBlock = optToBlock.decompress()
+        #print("bit pos = " + str(fileBitStream.pos))
+        blockFirstDatetimeObj, \
+        blockLastDatetimeObj = \
+            get_first_last_datetime_values_from_block(decompressedBlock,
+                                                      datetimeFormat,
+                                                      datetimeSubstringLength)
+        #print(optToBlockPos)
+        print(decompressedBlock, sep='', end='')
 
     return 0
 
