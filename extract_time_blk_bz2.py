@@ -909,7 +909,7 @@ def main():
     datetimeSubstringLength = len(optFromDatetimeObj.strftime(datetimeFormat))
     #print("datetimeSubstringLength = " + str(datetimeSubstringLength))
 
-    #firstBlockPos = fileBitStream.pos
+    #firstBlockPos = FIRST_BLOCK_POS
     #print("\nFirst block position = " + str(firstBlockPos))
     firstBlock = Bz2Block(fileBitStream)
     #print(first_block.decompress(bitStream))
@@ -946,6 +946,8 @@ def main():
     if optFromDatetimeObj <= firstBlockLastDatetimeObj:
         optFromDecompressedBlock = firstDecompressedBlock
         print(firstDecompressedBlock, end='')
+        blockLastDatetimeObj = firstBlockLastDatetimeObj
+        optFromBlockPos = FIRST_BLOCK_POS
     elif optFromDatetimeObj > lastBlockFirstDatetimeObj:
         print(lastDecompressedBlock)
         return 0
