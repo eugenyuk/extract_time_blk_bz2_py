@@ -808,15 +808,10 @@ def find_opt_from_block(fileBitStream, optFromDatetimeObj, datetimeFormat,
 
     while low <= high:
         middle = low + (high - low) // 2
-        print("\nlow = {}, middle = {}, high = {}".format(low, middle, high))
+        #print("\nlow = {}, middle = {}, high = {}".format(low, middle, high))
 
-        #fileBitStream.pos = middle
-        #print("bitStream.pos = mi = " + str(bitStream.pos))
         midBlockPos = fileBitStream.find(BLOCK_START_PATTERN, middle)[0]
-        print("Block pos = " + str(midBlockPos))
-        #if midBlockPos > hi:
-        #    hi = mi - 1
-        #print("bitStream.pos after find = " + str(bitStream.pos))
+        #print("Block pos = " + str(midBlockPos))
         midBlock = Bz2Block(fileBitStream)
         decompressedBlock = midBlock.decompress()
         #print("decompressedBlock = " + str(decompressedBlock))
@@ -826,30 +821,30 @@ def find_opt_from_block(fileBitStream, optFromDatetimeObj, datetimeFormat,
                                                       datetimeFormat,
                                                       datetimeSubstringLength)
         
-        print("blockFirstDatetimeObj = " + str(blockFirstDatetimeObj))
-        print("blockLastDatetimeObj = " + str(blockLastDatetimeObj))
+        #print("blockFirstDatetimeObj = " + str(blockFirstDatetimeObj))
+        #print("blockLastDatetimeObj = " + str(blockLastDatetimeObj))
 
         if optFromDatetimeObj > blockFirstDatetimeObj:
             msg = "--from {} > block first datetime value {}"
-            print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
+            #print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
 
             if optFromDatetimeObj <= blockLastDatetimeObj:
                 msg = "--from {} <= block last datetime value {}"
-                print(msg.format(optFromDatetimeObj, blockLastDatetimeObj))
+                #print(msg.format(optFromDatetimeObj, blockLastDatetimeObj))
                 break
 
             msg = "--from {} > block last datetime value {}"
-            print(msg.format(optFromDatetimeObj, blockLastDatetimeObj))
+            #print(msg.format(optFromDatetimeObj, blockLastDatetimeObj))
             low = midBlockPos + 1
 
         elif optFromDatetimeObj < blockFirstDatetimeObj:
             msg = "--from {} < block first datetime value {}"
-            print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
+            #print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
             high = middle - 1
         
         else:
             msg = "--from {} == block first datetime value {}"
-            print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
+            #print(msg.format(optFromDatetimeObj, blockFirstDatetimeObj))
             break
     
     return decompressedBlock, blockLastDatetimeObj, midBlockPos
@@ -920,8 +915,8 @@ def main():
                                                   datetimeFormat,
                                                   datetimeSubstringLength) 
     
-    print("First block first datetime value = " + str(firstBlockFirstDatetimeObj))
-    print("First block last datetime value = " + str(firstBlockLastDatetimeObj))
+    #print("First block first datetime value = " + str(firstBlockFirstDatetimeObj))
+    #print("First block last datetime value = " + str(firstBlockLastDatetimeObj))
     fileFirstDatetimeObj = firstBlockFirstDatetimeObj
     is_optFrom_lt_fileFirstDatetimeObj(optFromDatetimeObj, fileFirstDatetimeObj)
 
@@ -937,8 +932,8 @@ def main():
         get_first_last_datetime_values_from_block(lastDecompressedBlock, 
                                                  datetimeFormat,
                                                  datetimeSubstringLength)
-    print("Last block first datetime value = " + str(lastBlockFirstDatetimeObj))
-    print("Last block last datetime value = " + str(lastBlockLastDatetimeObj))
+    #print("Last block first datetime value = " + str(lastBlockFirstDatetimeObj))
+    #print("Last block last datetime value = " + str(lastBlockLastDatetimeObj))
     fileLastDatetimeObj = lastBlockLastDatetimeObj
     is_optTo_gt_fileLastDatetimeObj(optToDatetimeObj, fileLastDatetimeObj)
     
