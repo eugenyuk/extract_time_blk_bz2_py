@@ -11,6 +11,7 @@ How to use a tool:
 > extract_time_blk_bz2.py --from="datetime" --to="datetime" --file="/full/path/to/file.bz2"
 ```
 Supported from/to datetime formats are:
+
     "%Y-%m-%dT%H:%M:%S" (Ex. "2017-02-21T14:53:22")
     "%b %d %H:%M:%S" (Ex. "Oct 30 05:54:01")
     "%Y-%m-%d %H:%M:%S" (Ex. "2017-02-21 14:53:22")
@@ -18,9 +19,8 @@ Supported from/to datetime formats are:
 
 Tool was successfully tested on the following platforms:
 
-Linux Fedora 30 x64
-
-Windows 10 x64
+    Linux Fedora 30 x64
+    Windows 10 x64
 
 TODO:
 implement multi processing module to speed up program execution
