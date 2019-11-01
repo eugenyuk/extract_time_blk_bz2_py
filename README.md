@@ -18,7 +18,9 @@ Supported from/to datetime formats are:
     "%d/%b/%Y:%H:%M:%S" (Ex. "12/Dec/2015:18:39:27")
 
 Tool was successfully tested on the following platforms:
+
 Linux Fedora 30 x64
+
 Windows 10 x64
 
 TODO:
