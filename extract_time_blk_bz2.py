@@ -107,15 +107,18 @@ class Bz2Block():
         return blockTrees
 
     def parse_sym_map(self):
-        """ The SymMap represents the symbol stack used in the MTF stage by using
-        a two-level bit-map to indicate which symbols are present. The first element
-        MapL1, is a 16-bit integer where each bit corresponds to a contiguous
-        16-symbol region of the full 256-symbol space. The leading bit corresponds
-        with symbols, the next bit with symbols 16..31, and so on. The number of
-        bits set determines the number of MapL2 elements to follow, which are also
-        16-bit integers. Similar to the first level, the leading bits correspond
-        to the lower symbols in the associated 16-symbol region. If the bit is set,
-        then that indicates that the corresponding symbol is present.
+        """Parse symbols which are presented in decompressed data
+
+        The SymMap represents the symbol stack used in the MTF stage by
+        using a two-level bit-map to indicate which symbols are present. The
+        first element MapL1, is a 16-bit integer where each bit corresponds
+        to a contiguous 16-symbol region of the full 256-symbol space. The
+        leading bit corresponds with symbols, the next bit with symbols 16..31,
+        and so on. The number of bits set determines the number of MapL2
+        elements to follow, which are also 16-bit integers. Similar to the
+        first level, the leading bits correspond to the lower symbols in the
+        associated 16-symbol region. If the bit is set, then that indicates
+        that the corresponding symbol is present.
         """
         # sorted stack of used symbols
         symbolStack = []
@@ -131,7 +134,7 @@ class Bz2Block():
         return symbolStack
     
     def parse_num_trees(self):
-        """ Parses a number of huffman trees used in a block.
+        """Parse a number of huffman trees used in a block.
 
         The numTrees field is a 3-bit integer indicating the number of
         Huffman trees used in the HUFF stage. It must be between 2..6. The
@@ -155,7 +158,7 @@ class Bz2Block():
         return numTrees
     
     def parse_num_selectors(self):
-        """ Parses a number of selectors from file's header.
+        """Parse a number of selectors from file's header.
 
         The numSelectors field is a 15-bit integer indicating the number of
         selectors used in the Huffman conding stage.
@@ -169,7 +172,7 @@ class Bz2Block():
         return numSelectors
     #@profile
     def parse_selectors(self, numTrees, numSelectors):
-        """ Parse selectors list from block header. 
+        """Parse selectors list from block header. 
 
         Represents the selectors list used in the Huffman conding stage. To
         encode the selectors, a move-to-front transform is first applied and
@@ -196,7 +199,7 @@ class Bz2Block():
         #exit(1)
 
         idxs = []
-        # NEED CHANGE assert
+        # NEED CHANGE
         for _ in range(numSelectors):
             i = 0
             while selectorsBuffer.read('int:1'):
@@ -214,7 +217,9 @@ class Bz2Block():
 
     #@timecall
     def decode_mtf(self, idxs, stack):
-        """ The idea behind MTF encoding: 
+        """Decode MTF symbols.
+
+            The idea behind MTF encoding: 
         INPUT: 
         * stream of symbols
         * sorted stack of all the unique symbols that appear in syms
@@ -243,7 +248,7 @@ class Bz2Block():
         return decodedSymbols
 
     def parse_trees(self, numTrees, symbolStack):
-        """ 
+        """Parse trees.
         """
         trees = []
         numSyms = len(symbolStack) + 2
@@ -262,7 +267,7 @@ class Bz2Block():
         return trees
 
     def decompress(self):
-        """Decompresses bz2 block."""
+        """Decompress bz2 block."""
         #rle2Symbols = self.decode_huffman_codes(self.blockBuffer)
         rle2Symbols = self.decode_huffman_codes()
         #print("rle2Symbols = " + str(rle2Symbols) + str(len(rle2Symbols)))
@@ -352,7 +357,7 @@ class Bz2Block():
 
     #timecall
     def create_decode_huffman_tables(self, trees):
-        """ Generate several tables which are used to decode huffman codes. """
+        """Generate several tables which are used to decode huffman codes."""
         huffTreesData = {}
         for i, tree in enumerate(trees):
             minLen = min(tree)
@@ -394,7 +399,7 @@ class Bz2Block():
 
     #@timecall
     def generate_limits_table(self, minLen, maxLen, Tree):
-        """Generates limits table.
+        """Generate limits table.
 
         Which stores the largest symbol-coding value at each bit length, which
         is (previous limit << 1) + symbols at this level.
@@ -444,15 +449,7 @@ class Bz2Block():
     #@timecall
     def read_huffman_coded_symbol(self, minLen, maxLen, limits):
         """ Read Huffman coded symbol. """
-        
-        #try:
-        #huffSymbol = blockDataBuffer.read('uint:{}'.format(maxLen))
         huffSymbol = self.blockBitStream.read('uint:{}'.format(maxLen))
-        #except bitstring.ReadError():
-        #    bitStream.pos -= blockDataBufferSize - blockDataBuffer.pos
-        #    blockDataBuffer = bitStream.read(blockDataBufferSize)
-        #    huffSymbol = blockDataBuffer.read('uint:{}'.format(maxLen))
-        #    print("XYI")
 
         huffSymbolLen = minLen
 
@@ -465,8 +462,8 @@ class Bz2Block():
         
         #print("bitStream.pos before correction = " + str(bitStream.pos))
         self.blockBitStream.pos -= maxLen - huffSymbolLen
-#        blockDataBuffer.pos -= maxLen - huffSymbolLen
         #print("huffSymbol = {}, huffSymbolLen = {}".format(huffSymbol, huffSymbolLen))
+        
         # Throw away extra bits
         huffSymbol >>= (maxLen - huffSymbolLen)
 
@@ -531,9 +528,7 @@ class Bz2Block():
 
     #@timecall
     def decode_bwt(self, bwtSymbols):
-        """Decode BWT symbols.
-
-        """
+        """Decode BWT symbols."""
         origPtr = self.blockHeader['hOrigPtr']
         #print("origPtr = " + str(origPtr))
         charsCount = self.chars_count(bwtSymbols)
@@ -557,7 +552,7 @@ class Bz2Block():
         return decodedSymbols
 
     def chars_count(self, bwtSymbols):
-        """ Count amount of every character.
+        """Count amount of every character.
 
         charsCount index - character value
         charsCount value - amount of characters of given value
@@ -569,7 +564,7 @@ class Bz2Block():
         return charsCount
 
     def chars_start_pos(self, charsCount):
-        """ Find every char start position of BWT data.
+        """Find every char start position of BWT data.
 
         charsCount gives us amount of every char occurence. Given this we
         calculate start position of every character in encoded BWT data if it
@@ -594,9 +589,7 @@ class Bz2Block():
 
     #@timecall
     def decode_rle1(self, rle1Symbols):
-        """Decode RLE1 symbols.
-
-        """
+        """Decode RLE1 symbols."""
         decodedSymbols = ""
         runLenByte = 0
         runCounter = 5
@@ -649,6 +642,7 @@ class Bz2Block():
 
 
 def process_options():
+    """Process options and arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(    '--from',
                             dest = 'start',
@@ -716,7 +710,7 @@ def parse_stream_header(bitStream):
                         'hVersion': hVersion,
                         'hLevel':   hLevel
                    }
-    #print(bitStream.pos)
+
     validate_stream_header(streamHeader)
     
     return streamHeader
@@ -736,13 +730,18 @@ def validate_stream_header(streamHeader):
 
 
 def calc_bwt_buffer_limit(streamHeaderLevel):
+    """Calculate a limit of BWT data."""
     global bwtBufferLimit
     bwtBufferLimit = (streamHeaderLevel[0] - b'0'[0]) * 100000
 
 
 def get_datetime_substring_from_block(decompressedBlock, datetimeFormat,
     datetimeSubstringLen, datetimeSubstringPos = 'first'):
-
+    """Get datetime substring from a block.
+    
+    datetimeSubstringPos = 'first'|'last' means get the first or the last
+    datetime string from a block
+    """
     if datetimeSubstringPos == 'last':
         decompressedBlock = reversed(decompressedBlock)
     
@@ -783,6 +782,8 @@ def find_datetime_substring_in_string(string, datetimeFormat,
 
 def is_optFrom_lt_fileFirstDatetimeObj(optFromDatetimeObj,
     fileFirstDatetimeObj):
+    """Check if --from datetime value is less than the first datetime value
+    of a file."""
     if optFromDatetimeObj < fileFirstDatetimeObj:
         msg = ("A datetime value of --from {} shouldn't be < the first "
             "datetime value in the file {}.")
@@ -791,6 +792,8 @@ def is_optFrom_lt_fileFirstDatetimeObj(optFromDatetimeObj,
 
 def is_optTo_gt_fileLastDatetimeObj(optToDatetimeObj,
     fileLastDatetimeObj):
+    """Check if --to datetime value is greater than the last datetime value
+    of a file."""
     if optToDatetimeObj > fileLastDatetimeObj:
         msg = ("A datetime value of --to {} shouldn't be > the last "
             "datetime value in the file {}.")
@@ -851,7 +854,7 @@ def find_opt_from_block(fileBitStream, optFromDatetimeObj, datetimeFormat,
 
 
 def init_crc32_table():
-    """ Initialize CRC32 table.
+    """Initialize CRC32 table.
 
     Understanding CRC32:
     https://github.com/Michaelangel007/crc32
@@ -890,7 +893,7 @@ def get_first_last_datetime_values_from_block(decompressedBlock, datetimeFormat,
 
 #@timecall
 def main():
-    """ """
+    """Specify main workflow of a program."""
     optFromDatetimeObj, optToDatetimeObj, optFile, datetimeFormat = \
          process_options()
     is_optFrom_ge_optTo(optFromDatetimeObj, optToDatetimeObj)
