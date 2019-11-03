@@ -195,7 +195,8 @@ class Bz2Block():
 
         # Read max possible selectors bits into memory
         selectorsBuffer = self.blockBitStream.read(numSelectors * 6)
-        #print("maxSelBitstream = " + str(selectorsBuffer) + str(len(selectorsBuffer)))
+        #print("maxSelBitstream = " + str(selectorsBuffer) + \
+        #   str(len(selectorsBuffer)))
         #exit(1)
 
         idxs = []
@@ -385,9 +386,9 @@ class Bz2Block():
     def generate_permutes_table(self, minLen, maxLen, Tree):
         """Generate permutes table.
 
-        This is the lookup table for converting huffman coded symbols into decoded
-        symbols. bases table is the amount to subtract from the value of a huffman
-        symbol of a given length when using permutes.
+        This is the lookup table for converting huffman coded symbols into
+        decoded symbols. bases table is the amount to subtract from the value
+        of a huffman symbol of a given length when using permutes.
         """
         permutes = []
         for length in range(minLen, maxLen + 1):
@@ -457,12 +458,14 @@ class Bz2Block():
             huffSymbolLen += 1
 
         if huffSymbolLen > maxLen:
-            msg = "huffman symbol length {} can't be > maxLen {}. Bad bzip2 data."
+            msg = "huffman symbol length {} can't be > maxLen {}. \
+                Bad bzip2 data."
             raise ValueError(msg.format(huffSymbolLen, maxLen))
         
         #print("bitStream.pos before correction = " + str(bitStream.pos))
         self.blockBitStream.pos -= maxLen - huffSymbolLen
-        #print("huffSymbol = {}, huffSymbolLen = {}".format(huffSymbol, huffSymbolLen))
+        #print("huffSymbol = {}, huffSymbolLen = {}".format(huffSymbol,
+        #   huffSymbolLen))
         
         # Throw away extra bits
         huffSymbol >>= (maxLen - huffSymbolLen)
@@ -475,10 +478,10 @@ class Bz2Block():
         """Decode RLE2 symbols.
 
         2-nd stage of bzip2 decompression stack.
-        Decode RLE2 symbols by converting RUN_A and RUN_B sybmols (0 and 1) to run
-        of zeroes.
-        Decrement every symbol except RUN_A, RUN_B, EOB. So the resulting list of
-        indexes is ready fom MTF decoding.
+        Decode RLE2 symbols by converting RUN_A and RUN_B sybmols (0 and 1)
+        to run of zeroes.
+        Decrement every symbol except RUN_A, RUN_B, EOB. So the resulting
+        list of indexes is ready fom MTF decoding.
         """
 
         decodedSymbols = []
@@ -494,10 +497,10 @@ class Bz2Block():
                 # Neat trick that saves 1 symbol: instead of or-ing 0 or 1 at
     			# each bit position, add 1 or 2 instead.  For example,
     			# 1011 is 1<<0 + 1<<1 + 2<<2.  1010 is 2<<0 + 2<<1 + 1<<2.
-    			# You can make any bit pattern that way using 1 less symbol than
-    			# the basic or 0/1 method (except all bits 0, which would use no
-    			# symbols, but a run of length 0 doesn't mean anything in this
-    			# context). Thus space is saved.
+    			# You can make any bit pattern that way using 1 less symbol
+                # than the basic or 0/1 method (except all bits 0, which would
+                # use no symbols, but a run of length 0 doesn't mean anything
+                # in this context). Thus space is saved.
                 zeroCounter += (runPos << rle2Symbol)            
                 runPos <<= 1
                 #print("zeroCounter = " + str(zeroCounter))
@@ -506,7 +509,7 @@ class Bz2Block():
             # When we hit the first non-run symbol after a run, we now know
     		# how many times to repeat the last literal, so append that many
     		# copies to our buffer of decoded symbols (dbuf) now.  (The last
-    		# literal used is the one at the head of the mtfSymbol array.) */
+    		# literal used is the one at the head of the mtfSymbol array.)
             if runPos:
                 runPos = 0
 
@@ -518,7 +521,8 @@ class Bz2Block():
 
                 decodedSymbols.extend([0] * zeroCounter)
 
-            # decrement every non RUNA, RUNB, EOB symbols to conform to mtf alphabet
+            # decrement every non RUNA, RUNB, EOB symbols to conform to
+            # MTF alphabet
             decodedSymbols.append(rle2Symbol - 1)
 
         # delete EOB symbol
@@ -581,8 +585,9 @@ class Bz2Block():
         perm = [0] * len(bwtSymbols)
         for i, v in enumerate(bwtSymbols):
             perm[charsStartPos[v]] = i
-            #print("bwt = {}, charsStartPos[v] = {}, perm[charsStartPos[v]] = {}".format(v,
-            #    charsStartPos[v], perm[charsStartPos[v]]))
+            #print("bwt = {}, charsStartPos[v] = {}, 
+            #   perm[charsStartPos[v]] = {}".format(v, charsStartPos[v], 
+            #       perm[charsStartPos[v]]))
             charsStartPos[v] += 1
 
         return perm
@@ -602,7 +607,8 @@ class Bz2Block():
                 runLenByte = ord(curSymbol)
                 runCounter = 5
                 decodedSymbols += (prevSymbol * runLenByte)
-                #print("curSymbol = {} runLenByte = {} {}".format(curSymbol, runLenByte,
+                #print("curSymbol = {} runLenByte = {} {}".format(curSymbol, 
+                #   runLenByte,
                 #  prevSymbol * runLenByte))
                 continue
             
@@ -635,7 +641,8 @@ class Bz2Block():
         #        print(hex(v), end=' ')
 
         for curSym in decompressedBlock:
-            crc = ((crc << 8) & 0xffffffff) ^ crc32Table[(crc >> 24) ^ ord(curSym)]
+            crc = ((crc << 8) & 0xffffffff) ^ \
+                crc32Table[(crc >> 24) ^ ord(curSym)]
             #print("crc = " + str(format(crc, 'b')))
 
         return ~crc & 0xffffffff
@@ -918,8 +925,10 @@ def main():
                                                   datetimeFormat,
                                                   datetimeSubstringLength) 
     
-    #print("First block first datetime value = " + str(firstBlockFirstDatetimeObj))
-    #print("First block last datetime value = " + str(firstBlockLastDatetimeObj))
+    #print("First block first datetime value = " + \
+    #   str(firstBlockFirstDatetimeObj))
+    #print("First block last datetime value = " + \
+    #   str(firstBlockLastDatetimeObj))
     fileFirstDatetimeObj = firstBlockFirstDatetimeObj
     is_optFrom_lt_fileFirstDatetimeObj(optFromDatetimeObj, fileFirstDatetimeObj)
 
@@ -935,7 +944,8 @@ def main():
         get_first_last_datetime_values_from_block(lastDecompressedBlock, 
                                                  datetimeFormat,
                                                  datetimeSubstringLength)
-    #print("Last block first datetime value = " + str(lastBlockFirstDatetimeObj))
+    #print("Last block first datetime value = " + \
+    #   str(lastBlockFirstDatetimeObj))
     #print("Last block last datetime value = " + str(lastBlockLastDatetimeObj))
     fileLastDatetimeObj = lastBlockLastDatetimeObj
     is_optTo_gt_fileLastDatetimeObj(optToDatetimeObj, fileLastDatetimeObj)
