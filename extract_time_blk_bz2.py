@@ -70,16 +70,16 @@ class Bz2Block():
 
     def validate_block_header(self, blockHeader):
         if blockHeader['hMagic'] != int(BLOCK_START_PATTERN, 16):
-            msg = "Block header Magic {} isn't equal to block start magic \
-                number {}"
+            msg = ("Block header Magic {} isn't equal to block start magic "
+                "number {}")
             raise BlockHeaderMagicError(msg.format(blockHeader['hMagic'], 
                 BLOCK_START_PATTERN))
         if blockHeader['hRandomized']:
             msg = "Block header Randomized is 1 which is deprecated."
             raise BlockHeaderRandomizedError()
         if blockHeader['hOrigPtr'] > bwtBufferLimit:
-            msg = "Block header OrigPtr is {}, which is more than max size of \
-                decompressed block {}."
+            msg = ("Block header OrigPtr is {}, which is more than max size "
+                "of decompressed block {}.")
             raise BlockHeaderOrigPtrError(msg.format(blockHeader['hOrigPtr'],
                 bwtBufferLimit))
 
@@ -458,8 +458,8 @@ class Bz2Block():
             huffSymbolLen += 1
 
         if huffSymbolLen > maxLen:
-            msg = "huffman symbol length {} can't be > maxLen {}. \
-                Bad bzip2 data."
+            msg = ("huffman symbol length {} can't be > maxLen {}. "
+                "Bad bzip2 data.")
             raise ValueError(msg.format(huffSymbolLen, maxLen))
         
         #print("bitStream.pos before correction = " + str(bitStream.pos))
@@ -514,8 +514,8 @@ class Bz2Block():
                 runPos = 0
 
                 if len(rle2Symbols) + zeroCounter >= bwtBufferLimit:
-                    msg = "Amount of RLE2 symbols {} + amount of zeros {} \
-                        can't be >= size of block {}."
+                    msg = ("Amount of RLE2 symbols {} + amount of zeros {} "
+                        "can't be >= size of block {}.")
                     raise ValueError(msg.format(len(rle2Symbols), zeroCounter, 
                         bwtBufferLimit))
 
